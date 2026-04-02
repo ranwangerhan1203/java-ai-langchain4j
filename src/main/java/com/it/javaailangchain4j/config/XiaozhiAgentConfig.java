@@ -16,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -36,23 +36,42 @@ public class XiaozhiAgentConfig {
 
     @Bean
     ContentRetriever contentRetrieverXiaozhi() {
-        //使用FileSystemDocumentLoader读取指定目录下的知识库文档
-        //并使用默认的文档解析器对文档进行解析
-        Document document1 = FileSystemDocumentLoader.loadDocument("D:/下载/医院信息.md");
-        Document document2 = FileSystemDocumentLoader.loadDocument("D:/下载/科室信息.md");
-        Document document3 = FileSystemDocumentLoader.loadDocument("D:/下载/神经内科.md");
-        List<Document> documents = Arrays.asList(document1, document2, document3);
+        List<Document> documents = new ArrayList<>();
 
-        //使用内存向量存储
+        // 服务器绝对路径，和你当前目录完全匹配
+        String basePath = "/data/";
+
+        // 加载3个md文件，异常捕获保证不崩溃
+        try {
+            Document doc1 = FileSystemDocumentLoader.loadDocument(basePath + "医院信息.md");
+            documents.add(doc1);
+        } catch (Exception e) {
+            // 文件不存在时仅打印日志，不影响启动
+            System.err.println("文件加载失败: " + basePath + "医院信息.md, 错误: " + e.getMessage());
+        }
+
+        try {
+            Document doc2 = FileSystemDocumentLoader.loadDocument(basePath + "科室信息.md");
+            documents.add(doc2);
+        } catch (Exception e) {
+            System.err.println("文件加载失败: " + basePath + "科室信息.md, 错误: " + e.getMessage());
+        }
+
+        try {
+            Document doc3 = FileSystemDocumentLoader.loadDocument(basePath + "神经内科.md");
+            documents.add(doc3);
+        } catch (Exception e) {
+            System.err.println("文件加载失败: " + basePath + "神经内科.md, 错误: " + e.getMessage());
+        }
+
+        // 内存向量存储，无文件也能正常启动
         InMemoryEmbeddingStore<TextSegment> embeddingStore = new InMemoryEmbeddingStore<>();
-        //使用默认的文档分割器
-        EmbeddingStoreIngestor.ingest(documents, embeddingStore);
+        if (!documents.isEmpty()) {
+            EmbeddingStoreIngestor.ingest(documents, embeddingStore);
+        }
 
-        //从嵌入存储（EmbeddingStore）里检索和查询内容相关的信息
         return EmbeddingStoreContentRetriever.from(embeddingStore);
-
     }
-
 
     @Autowired
     private EmbeddingStore embeddingStore;
@@ -62,19 +81,12 @@ public class XiaozhiAgentConfig {
 
     @Bean
     ContentRetriever contentRetrieverXiaozhiPincone() {
-
-        // 创建一个 EmbeddingStoreContentRetriever 对象，用于从嵌入存储中检索内容
         return EmbeddingStoreContentRetriever
             .builder()
-            // 设置用于生成嵌入向量的嵌入模型
             .embeddingModel(embeddingModel)
-            // 指定要使用的嵌入存储
             .embeddingStore(embeddingStore)
-            // 设置最大检索结果数量，这里表示最多返回 1 条匹配结果
             .maxResults(1)
-            // 设置最小得分阈值，只有得分大于等于 0.8 的结果才会被返回
             .minScore(0.8)
-            // 构建最终的 EmbeddingStoreContentRetriever 实例
             .build();
     }
 }
